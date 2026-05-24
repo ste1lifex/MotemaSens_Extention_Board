@@ -26,3 +26,6 @@ MDK-ARM/**/*.uvoptx
 *~
 Thumbs.db
 Desktop.ini
+
+# Datasheet / docs (keep locally, not in repo)
+D9F0E0563E78A152428F643B369193AB.pdf
