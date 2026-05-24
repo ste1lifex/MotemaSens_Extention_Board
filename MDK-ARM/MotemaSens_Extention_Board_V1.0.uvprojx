@@ -499,6 +499,11 @@
               <FileType>1</FileType>
               <FilePath>../Core/Src/bsp_gd60932.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_sd_spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/bsp_sd_spi.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

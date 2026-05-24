@@ -31,6 +31,7 @@
 #include "bsp_max30102.h"
 #include "bsp_spi_oled.h"
 #include "bsp_gd60932.h"
+#include "bsp_sd_spi.h"
 #include "algorithm.h"
 /* USER CODE END Includes */
 
@@ -71,9 +72,6 @@ static int32_t g_spo2 = 0;
 static int8_t g_spo2_valid = 0;
 static float g_body_temp = 0.0f;
 static uint8_t g_body_temp_valid = 0U;
-static uint8_t g_max30102_online = 0U;
-static uint8_t g_gd60932_online = 0U;
-static uint8_t g_gd60932_read_ok = 0U;
 static uint32_t s_meas_cycle_t0 = 0U;
 static uint8_t s_cycle_led_off_done = 0U;
 static uint8_t s_cycle_temp_done = 0U;
@@ -87,6 +85,7 @@ static uint8_t s_meas_resync_after_stop_wakeup = 0U;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void App_DisplayTitle(void);
+static void App_UpdateLedStatusDisplay(uint8_t led_on);
 static void App_UpdateDisplay(int32_t hr, int8_t hr_valid, int32_t spo2, int8_t spo2_valid, uint32_t ir_sample);
 static uint8_t App_MAX30102_Probe(uint8_t *part_id);
 static float App_ReadBatteryVoltage(void);
@@ -137,10 +136,22 @@ static void App_EnterStopFromPowerSwitch(void)
   s_meas_resync_after_stop_wakeup = 1U;
 }
 
+static void App_UpdateLedStatusDisplay(uint8_t led_on)
+{
+  if (led_on != 0U)
+  {
+    OLED_ShowStr(0, 0, (unsigned char *)"LED ON            ", 1);
+  }
+  else
+  {
+    OLED_ShowStr(0, 0, (unsigned char *)"LED OFF           ", 1);
+  }
+}
+
 static void App_DisplayTitle(void)
 {
   OLED_CLS();
-  OLED_ShowStr(0, 0, (unsigned char *)"Health Monitor", 1);
+  App_UpdateLedStatusDisplay(0U);
   OLED_ShowStr(0, 2, (unsigned char *)"HR:", 1);
   OLED_ShowStr(0, 3, (unsigned char *)"SpO2:", 1);
 }
@@ -245,9 +256,11 @@ static void App_UpdatePpgLevelDisplay(uint32_t ir_raw, uint32_t red_raw, uint8_t
   char ir_tag;
   char rd_tag;
 
+  App_UpdateLedStatusDisplay(led_on);
+
   if (led_on == 0U)
   {
-    OLED_ShowStr(0, 4, (unsigned char *)"IR: ---  LED off ", 1);
+    OLED_ShowStr(0, 4, (unsigned char *)"IR: ---          ", 1);
     OLED_ShowStr(0, 5, (unsigned char *)"RD: ---          ", 1);
     return;
   }
@@ -318,7 +331,7 @@ int main(void)
   Bsp_MAX30102_Init();
   MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
   App_ScanI2C2();
-  g_gd60932_online = (GD60932_Init() == GD60932_OK) ? 1U : 0U;
+  (void)GD60932_Init();
   HAL_Delay(100);
 
   {
@@ -331,16 +344,33 @@ int main(void)
 
     if (App_MAX30102_Probe(&part_id) != 0U)
     {
-      g_max30102_online = 1U;
       (void)snprintf(line, sizeof(line), "MAX:OK ID=0x%02X", part_id);
       OLED_ShowStr(0, 3, (unsigned char *)line, 1);
     }
     else
     {
-      g_max30102_online = 0U;
       OLED_ShowStr(0, 3, (unsigned char *)"MAX: FAIL", 1);
       OLED_ShowStr(0, 5, (unsigned char *)"Check PB8/PB7", 1);
       OLED_ShowStr(0, 6, (unsigned char *)"and power 3V3", 1);
+    }
+
+    if (SD_Init() == SD_OK)
+    {
+      SD_CardInfo_t sd_info;
+      if (SD_GetCardInfo(&sd_info) == SD_OK)
+      {
+        uint32_t mb = (uint32_t)(sd_info.capacity_bytes / (1024ULL * 1024ULL));
+        (void)snprintf(line, sizeof(line), "SD:OK %luMB", (unsigned long)mb);
+      }
+      else
+      {
+        (void)snprintf(line, sizeof(line), "SD: OK");
+      }
+      OLED_ShowStr(0, 4, (unsigned char *)line, 1);
+    }
+    else
+    {
+      OLED_ShowStr(0, 4, (unsigned char *)"SD: FAIL", 1);
     }
   }
 
@@ -465,14 +495,10 @@ int main(void)
         if (GD60932_ReadBodyTemperature(&g_body_temp) == GD60932_OK)
         {
           g_body_temp_valid = 1U;
-          g_gd60932_read_ok = 1U;
-          g_gd60932_online = 1U;
         }
         else
         {
           g_body_temp_valid = 0U;
-          g_gd60932_read_ok = 0U;
-          g_gd60932_online = 0U;
         }
         App_UpdateTemperatureDisplay(g_body_temp, g_body_temp_valid);
         s_cycle_temp_done = 1U;
