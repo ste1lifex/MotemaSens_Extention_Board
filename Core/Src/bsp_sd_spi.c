@@ -496,6 +496,27 @@ SD_Status_t SD_ReadBlocks(uint32_t block_addr, uint8_t *buf, uint32_t block_coun
     return SD_OK;
 }
 
+SD_Status_t SD_WriteBlocks(uint32_t block_addr, const uint8_t *buf, uint32_t block_count)
+{
+    SD_Status_t st = SD_OK;
+
+    if ((s_sd_ready == 0U) || (buf == NULL) || (block_count == 0U))
+    {
+        return SD_ERR_NOT_READY;
+    }
+
+    for (uint32_t i = 0U; i < block_count; i++)
+    {
+        st = SD_WriteBlock(block_addr + i, buf + (i * SD_BLOCK_SIZE));
+        if (st != SD_OK)
+        {
+            return st;
+        }
+    }
+
+    return SD_OK;
+}
+
 SD_Status_t SD_GetCardInfo(SD_CardInfo_t *info)
 {
     if ((info == NULL) || (s_sd_ready == 0U))

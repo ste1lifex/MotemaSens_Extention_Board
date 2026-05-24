@@ -32,6 +32,7 @@
 #include "bsp_spi_oled.h"
 #include "bsp_gd60932.h"
 #include "bsp_sd_spi.h"
+#include "bsp_sd_log.h"
 #include "algorithm.h"
 /* USER CODE END Includes */
 
@@ -79,6 +80,8 @@ static uint8_t s_spo2_computed_this_cycle = 0U;
 static uint32_t s_last_ir_sample = 0U;
 static uint32_t s_pwr_high_since = 0U;
 static uint8_t s_meas_resync_after_stop_wakeup = 0U;
+static uint32_t s_cycle_index = 0U;
+static uint16_t s_cycle_ppg_count = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -367,6 +370,7 @@ int main(void)
         (void)snprintf(line, sizeof(line), "SD: OK");
       }
       OLED_ShowStr(0, 4, (unsigned char *)line, 1);
+      (void)SD_Log_Init();
     }
     else
     {
@@ -419,6 +423,7 @@ int main(void)
       s_cycle_temp_done = 0U;
       s_spo2_computed_this_cycle = 0U;
       s_last_ir_sample = 0U;
+      s_cycle_ppg_count = 0U;
       sample_index = 0U;
       (void)MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
       App_DisplayTitle();
@@ -435,10 +440,27 @@ int main(void)
 
     if (dt >= APP_MEAS_CYCLE_MS)
     {
+      if (SD_Log_IsReady() != 0U)
+      {
+        (void)SD_Log_WriteCycle(s_cycle_index,
+                                APP_MEAS_CYCLE_MS,
+                                g_heart_rate,
+                                g_hr_valid,
+                                g_spo2,
+                                g_spo2_valid,
+                                g_body_temp,
+                                g_body_temp_valid,
+                                g_ir_buffer,
+                                g_red_buffer,
+                                s_cycle_ppg_count);
+        s_cycle_index++;
+      }
+
       s_meas_cycle_t0 = now_ms;
       s_cycle_led_off_done = 0U;
       s_cycle_temp_done = 0U;
       s_spo2_computed_this_cycle = 0U;
+      s_cycle_ppg_count = 0U;
       sample_index = 0U;
       (void)MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
       dt = 0U;
@@ -483,6 +505,7 @@ int main(void)
 
         if (dt >= APP_SPO2_PHASE_MS)
         {
+          s_cycle_ppg_count = sample_index;
           sample_index = 0U;
           (void)MAX30102_SetLEDCurrent(0U, 0U);
           s_cycle_led_off_done = 1U;

@@ -40,6 +40,7 @@ SD_Status_t SD_Init(void);
 SD_Status_t SD_ReadBlock(uint32_t block_addr, uint8_t *buf);
 SD_Status_t SD_WriteBlock(uint32_t block_addr, const uint8_t *buf);
 SD_Status_t SD_ReadBlocks(uint32_t block_addr, uint8_t *buf, uint32_t block_count);
+SD_Status_t SD_WriteBlocks(uint32_t block_addr, const uint8_t *buf, uint32_t block_count);
 SD_Status_t SD_GetCardInfo(SD_CardInfo_t *info);
 uint8_t SD_IsReady(void);
 
