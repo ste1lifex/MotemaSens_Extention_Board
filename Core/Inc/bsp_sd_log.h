@@ -16,7 +16,7 @@ SD_Log_Status_t SD_Log_Init(void);
 
 uint8_t SD_Log_IsReady(void);
 
-/* 写入一个 5 s 测量周期：含全部 IR/RD 采样点及 HR/SpO2/体温 */
+/* 写入一个 8 s 测量周期：含全部 IR/RD 采样点及 HR/SpO2/体温 */
 SD_Log_Status_t SD_Log_WriteCycle(uint32_t cycle_index,
                                   uint32_t cycle_ms,
                                   int32_t hr,

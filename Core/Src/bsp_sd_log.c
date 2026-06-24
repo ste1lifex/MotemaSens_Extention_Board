@@ -7,10 +7,13 @@
 
 #define SD_LOG_FILE_PATH   "DATA.CSV"
 #define SD_LOG_MKFS_WORK   4096U
+/* 每 N 个周期 f_sync 一次，减轻写盘阻塞（调试数据仍逐行写入） */
+#define SD_LOG_SYNC_EVERY_CYCLES  5U
 
 static FATFS s_fatfs;
 static FIL s_fil;
 static uint8_t s_log_ready = 0U;
+static uint8_t s_sync_cycle_count = 0U;
 
 static SD_Log_Status_t SD_Log_MapResult(FRESULT fr)
 {
@@ -178,6 +181,13 @@ SD_Log_Status_t SD_Log_WriteCycle(uint32_t cycle_index,
         }
     }
 
-    fr = f_sync(&s_fil);
-    return SD_Log_MapResult(fr);
+    s_sync_cycle_count++;
+    if (s_sync_cycle_count >= SD_LOG_SYNC_EVERY_CYCLES)
+    {
+        s_sync_cycle_count = 0U;
+        fr = f_sync(&s_fil);
+        return SD_Log_MapResult(fr);
+    }
+
+    return SD_LOG_OK;
 }

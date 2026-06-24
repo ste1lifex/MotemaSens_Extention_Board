@@ -32,3 +32,6 @@ Middlewares/Third_Party/FatFs/src/ffunicode.c
 
 # Datasheet / docs (keep locally, not in repo)
 D9F0E0563E78A152428F643B369193AB.pdf
+
+# Offline data processing scripts, videos, and frames
+data_process/
