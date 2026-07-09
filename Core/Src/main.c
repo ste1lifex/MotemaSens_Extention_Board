@@ -51,9 +51,20 @@
 /* MAX30102 原始幅值（18 位有效）：约 <5000 偏弱，>80000 易饱和，见 bsp_max30102 注释 */
 #define APP_PPG_WEAK_MAX               5000U
 #define APP_PPG_STRONG_MIN             80000U
-/* 红/红外 LED 电流档位(0x00~0xFF)。在 0x14 基础上再略降一档 */
+/* 红/红外 LED 电流档位(0x00~0xFF)。在 0x14 基础上再略降一档（AGC 初始/回退值） */
 #define APP_MAX30102_LED_RED           0x13U
 #define APP_MAX30102_LED_IR            0x13U
+
+/* 软件 AGC：红=红外电流等比伺服，把 IR 的 DC 拉回标定工作点(~25000)。
+ * 等比缩放不改变 DC_rd/DC_ir，故 R 与 SpO2 标定仍有效；仅补偿跨会话耦合/贴合差异。
+ * 死区较宽，良好耦合(20k~32k)时不动，避免抖动；越界才逐步调整。 */
+#define APP_AGC_ENABLE                 1
+#define APP_AGC_DC_TARGET              25000U   /* 目标 IR DC（=标定工作点） */
+#define APP_AGC_DC_LO                  20000U   /* 死区下限：低于则加大电流 */
+#define APP_AGC_DC_HI                  32000U   /* 死区上限：高于则减小电流 */
+#define APP_AGC_LED_MIN                0x0AU    /* 电流下限(~2mA) */
+#define APP_AGC_LED_MAX                0x40U    /* 电流上限(~12.8mA)，确保红光(耦合更高)不饱和 */
+#define APP_AGC_MAX_STEP               6        /* 每周期最大调整步长，防止过冲/振荡 */
 /* PB6 接 3.3V 判为关机请求的去抖时间（内部下拉，悬空为低） */
 #define APP_PWR_SW_DEBOUNCE_MS         80U
 /* 血氧阶段结束时至少多少点才调用算法（不必凑满 BUFFER_SIZE） */
@@ -99,6 +110,8 @@ static uint8_t s_hr_fifo_idx = 0U;
 static int32_t s_spo2_fifo[SPO2_FIFO_SIZE];
 static uint8_t s_spo2_fifo_count = 0U;
 static uint8_t s_spo2_fifo_idx = 0U;
+/* 软件 AGC 当前 LED 电流档位（红=红外共用），初值为标定电流 */
+static uint8_t s_agc_led_pa = APP_MAX30102_LED_RED;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -117,6 +130,7 @@ static void App_RestorePb6PowerSensePin(void);
 static void App_ComputePpgMetrics(uint16_t n_samples);
 static int32_t App_SmoothHeartRate(int32_t hr, int8_t hr_valid);
 static int32_t App_SmoothSpo2(int32_t spo2, int8_t spo2_valid);
+static void App_UpdateAgc(uint32_t mean_ir);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -161,13 +175,18 @@ static void App_EnterStopFromPowerSwitch(void)
 
 static void App_UpdateLedStatusDisplay(uint8_t led_on)
 {
+  char line[24];
+
   if (led_on != 0U)
   {
-    OLED_ShowStr(0, 0, (unsigned char *)"LED ON            ", 1);
+    /* 显示当前 AGC 电流档位，便于现场观察 AGC 是否调整 */
+    (void)snprintf(line, sizeof(line), "LED ON PA=%02X    ", (unsigned int)s_agc_led_pa);
+    OLED_ShowStr(0, 0, (unsigned char *)line, 1);
   }
   else
   {
-    OLED_ShowStr(0, 0, (unsigned char *)"LED OFF           ", 1);
+    (void)snprintf(line, sizeof(line), "LED OFF PA=%02X   ", (unsigned int)s_agc_led_pa);
+    OLED_ShowStr(0, 0, (unsigned char *)line, 1);
   }
 }
 
@@ -186,11 +205,11 @@ static void App_UpdateDisplay(int32_t hr, int8_t hr_valid, int32_t spo2, int8_t 
 
   if (ir_sample < 15000U)
   {
-    OLED_ShowStr(0, 6, (unsigned char *)"Place finger      ", 1);
+    OLED_ShowStr(0, 6, (unsigned char *)"Place        ", 1);
     return;
   }
 
-  OLED_ShowStr(0, 6, (unsigned char *)"Finger detected   ", 1);
+  OLED_ShowStr(0, 6, (unsigned char *)"Body detected   ", 1);
 
   if ((hr_valid != 0) && (hr >= MIN_HR) && (hr <= MAX_HR))
   {
@@ -384,6 +403,50 @@ static int32_t App_SmoothSpo2(int32_t spo2, int8_t spo2_valid)
   return buf[n / 2U];
 }
 
+static void App_UpdateAgc(uint32_t mean_ir)
+{
+#if APP_AGC_ENABLE
+  int32_t pa = (int32_t)s_agc_led_pa;
+  int32_t new_pa;
+  int32_t step;
+
+  /* 无有效均值或已在死区内则保持不变（良好耦合不抖动） */
+  if (mean_ir == 0U)
+  {
+    return;
+  }
+  if ((mean_ir >= APP_AGC_DC_LO) && (mean_ir <= APP_AGC_DC_HI))
+  {
+    return;
+  }
+
+  /* 比例伺服：DC 正比于电流，故 new_pa = pa * target / mean_ir */
+  new_pa = (int32_t)(((uint64_t)pa * (uint64_t)APP_AGC_DC_TARGET) / (uint64_t)mean_ir);
+  step = new_pa - pa;
+  if (step > APP_AGC_MAX_STEP)
+  {
+    step = APP_AGC_MAX_STEP;
+  }
+  else if (step < -APP_AGC_MAX_STEP)
+  {
+    step = -APP_AGC_MAX_STEP;
+  }
+  pa += step;
+
+  if (pa < (int32_t)APP_AGC_LED_MIN)
+  {
+    pa = (int32_t)APP_AGC_LED_MIN;
+  }
+  else if (pa > (int32_t)APP_AGC_LED_MAX)
+  {
+    pa = (int32_t)APP_AGC_LED_MAX;
+  }
+  s_agc_led_pa = (uint8_t)pa;
+#else
+  (void)mean_ir;
+#endif
+}
+
 static void App_ComputePpgMetrics(uint16_t n_samples)
 {
   int32_t hr_raw = 0;
@@ -394,6 +457,19 @@ static void App_ComputePpgMetrics(uint16_t n_samples)
     g_spo2_valid = 0;
     return;
   }
+
+#if APP_AGC_ENABLE
+  {
+    /* 用本周期 IR 均值(≈DC)更新 AGC，下一周期生效 */
+    uint32_t k;
+    uint64_t sum_ir = 0U;
+    for (k = 0U; k < n_samples; k++)
+    {
+      sum_ir += g_ir_buffer[k];
+    }
+    App_UpdateAgc((uint32_t)(sum_ir / n_samples));
+  }
+#endif
 
   maxim_heart_rate_and_oxygen_saturation(g_ir_buffer, (int32_t)n_samples,
                                          g_red_buffer, &g_spo2, &g_spo2_valid,
@@ -471,7 +547,7 @@ int main(void)
   OLED_Init();
 
   Bsp_MAX30102_Init();
-  MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
+  MAX30102_SetLEDCurrent(s_agc_led_pa, s_agc_led_pa);
   App_ScanI2C2();
   (void)GD60932_Init();
   HAL_Delay(100);
@@ -569,8 +645,10 @@ int main(void)
       /* 唤醒后重新开始测量，清空 SpO2 跨周期平滑（避免休眠前的旧值串入） */
       s_spo2_fifo_count = 0U;
       s_spo2_fifo_idx = 0U;
+      /* 唤醒后重置 AGC 到标定电流，重新收敛（贴合可能已变） */
+      s_agc_led_pa = APP_MAX30102_LED_RED;
       sample_index = 0U;
-      (void)MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
+      (void)MAX30102_SetLEDCurrent(s_agc_led_pa, s_agc_led_pa);
       App_DisplayTitle();
       App_UpdateTemperatureDisplay(0.0f, 0U);
       App_UpdatePpgLevelDisplay(0U, 0U, 1U);
@@ -594,7 +672,8 @@ int main(void)
       s_hr_fifo_count = 0U;
       s_hr_fifo_idx = 0U;
       sample_index = 0U;
-      (void)MAX30102_SetLEDCurrent(APP_MAX30102_LED_RED, APP_MAX30102_LED_IR);
+      /* 应用上一周期 AGC 收敛后的电流（红=红外，保持 R 标定有效） */
+      (void)MAX30102_SetLEDCurrent(s_agc_led_pa, s_agc_led_pa);
       dt = 0U;
       App_UpdatePpgLevelDisplay(0U, 0U, 1U);
     }

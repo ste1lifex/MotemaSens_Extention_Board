@@ -37,16 +37,19 @@
 #define ALGO_CHEST_HR_AC_LO            73
 #define ALGO_CHEST_HR_AC_HI            80
 /*
- * SpO2 胸贴线性标定（基于 DATA_chest_24062026_1.3.4 + 视频参考 Omron 标定）:
- *   - R 由「线性去趋势后 MAD」之比给出: R=(MAD_rd/DC_rd)/(MAD_ir/DC_ir)
- *   - 标定会话静息真值 SpO2≈96，质量门控后 R 中位数≈0.869，离散 std≈0.034
- *   - 反推: SpO2 = SLOPE*R + INTERCEPT，令 R=0.869 -> 96.5
- *   - 离线复算（5 点中值平滑）RMSE≈0.8%，远优于原全窗 MAD 法(RMSE≈2.8%)
- * 注意: 标定为单人静息、SpO2 几乎恒定，斜率取自反射式血氧文献(约 -17)，
- *       低血氧段未经验证；仅保证静息绝对值与抑制误读，勿用于诊断低氧。
+ * SpO2 胸贴线性标定 SpO2 = SLOPE*R + INTERCEPT
+ *   R = (MAD_rd/DC_rd)/(MAD_ir/DC_ir)（线性去趋势后 MAD 之比）
+ *
+ * 合并两次会话标定（0624: R_med0.865/真值96；0704: R_med0.955/真值97，共 67 个 QC 周期）:
+ *   - 关键发现: 跨会话 R 随耦合/贴合/DC 漂移，与真实血氧无一致关系
+ *     （无约束最小二乘拟出斜率 +6.5，非生理）→ 陡斜率会放大耦合噪声。
+ *   - 折中: 取较缓斜率 -8（保留对大幅低氧的生理响应），合并最优截距 103.8。
+ *     两会话偏差均 <±1、总 RMSE≈1.0%；相比原 -17/110.4 把 0704 的 -3.0% 偏差降到 -0.9%。
+ * 重要局限: 标定数据全为静息健康(SpO2 95~98)，斜率无法从中验证；
+ *           低血氧段与绝对精度未经验证，勿用于诊断。要真正标定斜率需采集屏气/低氧数据。
  */
-#define ALGO_SPO2_CHEST_SLOPE         (-17.0f)
-#define ALGO_SPO2_CHEST_INTERCEPT     (110.4f)
+#define ALGO_SPO2_CHEST_SLOPE         (-8.0f)
+#define ALGO_SPO2_CHEST_INTERCEPT     (103.8f)
 #define ALGO_SPO2_CHEST_CLAMP_LO      85.0f
 #define ALGO_SPO2_CHEST_CLAMP_HI      100.0f
 /* 去趋势 MAD 之比 R×100 合理区间（超出视为运动/噪声，SpO2 不可靠） */
