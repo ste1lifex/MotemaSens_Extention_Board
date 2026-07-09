@@ -144,7 +144,8 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /* PB12 由 bsp_sd_spi 作 TF_CS 软件片选，仅配置 SCK */
+    /* PB12 由 bsp_sd_spi 作 TF_CS 软件片选，仅配置 SCK
+     * PB12 is TF_CS (software CS) in bsp_sd_spi; configure SCK only here */
     GPIO_InitStruct.Pin = GPIO_PIN_13;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;

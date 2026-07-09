@@ -3,7 +3,8 @@
 
 #include "main.h"
 
-/* TF 卡槽：SPI2，PB12=CS，PB13=SCK，PC2=MISO，PC3=MOSI */
+/* TF 卡槽：SPI2，PB12=CS，PB13=SCK，PC2=MISO，PC3=MOSI
+ * TF card slot: SPI2, PB12=CS, PB13=SCK, PC2=MISO, PC3=MOSI */
 #define SD_CS_PORT      GPIOB
 #define SD_CS_PIN       GPIO_PIN_12
 

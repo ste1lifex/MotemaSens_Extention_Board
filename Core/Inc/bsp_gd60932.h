@@ -20,7 +20,8 @@ typedef enum
 } GD60932_Status_t;
 
 GD60932_Status_t GD60932_Init(void);
-/* 额头温度模式：0x80 → 0x1A → 延时 0.5s → 读 0x1C */
+/* 额头温度模式：0x80 → 0x1A → 延时 0.5s → 读 0x1C
+ * Forehead temp mode: 0x80 -> 0x1A -> delay 0.5s -> read 0x1C */
 GD60932_Status_t GD60932_ReadBodyTemperature(float *temp_c);
 GD60932_Status_t GD60932_ReadObjectTemperature(float *temp_c);
 GD60932_Status_t GD60932_ReadAmbientTemperature(float *temp_c);

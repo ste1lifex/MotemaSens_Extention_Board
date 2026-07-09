@@ -11,12 +11,14 @@ typedef enum
     SD_LOG_ERR_IO
 } SD_Log_Status_t;
 
-/* 开机调用：从扇区 2 起覆盖写入新会话（不保留上次数据） */
+/* 开机调用：从扇区 2 起覆盖写入新会话（不保留上次数据）
+ * Call at boot: overwrite new session from sector 2 (previous data not kept) */
 SD_Log_Status_t SD_Log_Init(void);
 
 uint8_t SD_Log_IsReady(void);
 
-/* 写入一个 8 s 测量周期：含全部 IR/RD 采样点及 HR/SpO2/体温 */
+/* 写入一个 8 s 测量周期：含全部 IR/RD 采样点及 HR/SpO2/体温
+ * Write one 8s measurement cycle: all IR/RD samples plus HR/SpO2/temperature */
 SD_Log_Status_t SD_Log_WriteCycle(uint32_t cycle_index,
                                   uint32_t cycle_ms,
                                   int32_t hr,

@@ -4,26 +4,27 @@
   * @author  Maxim Integrated
   * @version V1.0
   * @date    2024
-  * @brief   心率和血氧计算算法 - C语言版本
+  * @brief   心率和血氧计算算法 - C语言版本 / HR and SpO2 algorithm - C version
   ******************************************************************************
   */
 #include "algorithm.h"
-#include <stdlib.h>
 
-/* SpO2计算公式: -45.060*ratioAverage*ratioAverage + 30.354*ratioAverage + 94.845 */
+/* SpO2计算公式: -45.060*ratioAverage*ratioAverage + 30.354*ratioAverage + 94.845
+ * SpO2 formula: -45.060*ratioAverage^2 + 30.354*ratioAverage + 94.845 */
 
-/* 静态变量 */
+/* 静态变量 / Static variables */
 static int32_t an_x[BUFFER_SIZE];              // ir
 static int32_t an_y[BUFFER_SIZE];              // red
 #if ALGO_USE_IR_BANDPASS
-static float s_bp_work[BUFFER_SIZE]; /* 去直流浮点 + 带通中间量 */
+static float s_bp_work[BUFFER_SIZE]; /* 去直流浮点 + 带通中间量 / DC-removed float + bandpass workspace */
 #endif
 
-/* 辅助宏 */
+/* 辅助宏 / Helper macros */
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
-/* SpO2 胸贴系数见 algorithm.h（ALGO_CHEST_MODE） */
+/* SpO2 胸贴系数见 algorithm.h（ALGO_CHEST_MODE）
+ * Chest SpO2 coefficients in algorithm.h (ALGO_CHEST_MODE) */
 
 static void ppg_sanitize_samples(uint32_t *ir, uint32_t *red, int32_t len)
 {
@@ -257,7 +258,8 @@ static int8_t ppg_hr_in_plausible_band(int32_t hr)
 static int8_t ppg_hr_fuse_chest(int32_t hr_peak, int8_t peak_ok, int32_t hr_ac, int8_t ac_ok,
                                 int32_t *pn_hr)
 {
-    /* 自相关落在 70~85 优先（1.3.4：均值 76.6，略宽于 73~80） */
+    /* 自相关落在 70~85 优先（1.3.4：均值 76.6，略宽于 73~80）
+     * Prefer autocorr HR in 70~85 (v1.3.4: mean 76.6, slightly wider than 73~80) */
     if ((ac_ok != 0) && (ppg_hr_in_plausible_band(hr_ac) != 0))
     {
         *pn_hr = hr_ac;
@@ -314,7 +316,8 @@ static float ppg_spo2_from_ratio_x100(int32_t ratio_x100)
     float f_ratio = (float)ratio_x100 / 100.0f;
 
 #if ALGO_CHEST_MODE
-    /* 胸贴：去趋势 MAD 之比 R 与指夹 R 不同量纲，用本地线性标定而非指夹二次曲线 */
+    /* 胸贴：去趋势 MAD 之比 R 与指夹 R 不同量纲，用本地线性标定而非指夹二次曲线
+     * Chest: detrended MAD ratio R differs from finger-clip R; use local linear cal, not quadratic */
     float f_spo2 = (ALGO_SPO2_CHEST_SLOPE * f_ratio) + ALGO_SPO2_CHEST_INTERCEPT;
     if (f_spo2 < ALGO_SPO2_CHEST_CLAMP_LO)
     {
@@ -341,15 +344,22 @@ static float ppg_spo2_from_ratio_x100(int32_t ratio_x100)
 
 /*
  * 胸贴 SpO2 比值 R（去趋势 + MAD + 通道相关门控）。
+ * Chest-patch SpO2 ratio R (detrend + MAD + channel-correlation gating).
  *
  * 做法（单遍累加，无需额外大缓冲）：
+ * Method (single-pass accumulation, no extra large buffer):
  *   1) DC = mean(ir), mean(rd)
  *   2) 对每通道做最小二乘线性去趋势（抑制 6s 窗内呼吸基线漂移）
+ *      Least-squares linear detrend per channel (suppress breath baseline drift in 6s window)
  *   3) AC = MAD = mean(|去趋势值|)，对小幅脉动比峰谷法更抗噪
+ *      AC = MAD = mean(|detrended|); more noise-robust than peak-valley for small pulsation
  *   4) 通道相关 corr(ir_dt, rd_dt)：好脉搏两通道高度同形，运动/噪声则不相关
+ *      Channel corr(ir_dt, rd_dt): good pulse highly correlated; motion/noise uncorrelated
  *   5) R = (AC_rd/DC_rd)/(AC_ir/DC_ir)，并做 PI、相关、R 区间三重门控
+ *      R = (AC_rd/DC_rd)/(AC_ir/DC_ir) with PI, correlation, and R-range triple gating
  *
  * 返回 1 且写出 *ratio_x100（=100*R）表示可信；否则返回 0。
+ * Returns 1 and writes *ratio_x100 (=100*R) if trustworthy; else 0.
  */
 static int8_t ppg_spo2_window_ratio(const uint32_t *ir, const uint32_t *rd, int32_t len,
                                     int32_t *ratio_x100)
@@ -361,7 +371,7 @@ static int8_t ppg_spo2_window_ratio(const uint32_t *ir, const uint32_t *rd, int3
     float mean_rd;
     float mx;
     float xc;
-    float sxy_ir = 0.0f;  /* sum(xc * ir) 用于斜率 */
+    float sxy_ir = 0.0f;  /* sum(xc * ir) 用于斜率 / for slope */
     float sxy_rd = 0.0f;
     float sxx = 0.0f;     /* sum(xc^2) */
     float slope_ir;
@@ -410,7 +420,8 @@ static int8_t ppg_spo2_window_ratio(const uint32_t *ir, const uint32_t *rd, int3
     slope_ir = sxy_ir / sxx;
     slope_rd = sxy_rd / sxx;
 
-    /* 第二遍：在线生成去趋势值，累加 MAD 与相关所需统计量 */
+    /* 第二遍：在线生成去趋势值，累加 MAD 与相关所需统计量
+     * Second pass: online detrended values, accumulate MAD and correlation stats */
     for (k = 0; k < len; k++)
     {
         float xi;
@@ -432,14 +443,16 @@ static int8_t ppg_spo2_window_ratio(const uint32_t *ir, const uint32_t *rd, int3
         return 0;
     }
 
-    /* 灌注指数门控（过小=无脉动，过大=运动伪迹） */
+    /* 灌注指数门控（过小=无脉动，过大=运动伪迹）
+     * Perfusion index gating (too low=no pulse, too high=motion artifact) */
     pi_ir = mad_ir / mean_ir;
     if ((pi_ir < ALGO_SPO2_PI_MIN) || (pi_ir > ALGO_SPO2_PI_MAX))
     {
         return 0;
     }
 
-    /* 通道相关门控：红/红外脉搏应高度同形 */
+    /* 通道相关门控：红/红外脉搏应高度同形
+     * Channel correlation gating: red/IR pulse waveforms should be highly similar */
     denom_corr = s_ii * s_rr;
     if (denom_corr <= 0.0f)
     {
@@ -519,7 +532,8 @@ static int8_t ppg_signal_usable(const uint32_t *ir, int32_t len)
 }
 
 #if ALGO_USE_IR_BANDPASS
-/* Butterworth bandpass 2nd order, 0.5~4.5 Hz, Fs=100 Hz（scipy.signal.butter 系数） */
+/* Butterworth bandpass 2nd order, 0.5~4.5 Hz, Fs=100 Hz（scipy.signal.butter 系数）
+ * Butterworth bandpass 2nd order, 0.5~4.5 Hz, Fs=100 Hz (scipy.signal.butter coeffs) */
 static void ppg_lfilter_one_section(const float *in, float *out, int32_t len,
                                     float b0, float b1, float b2, float a1, float a2)
 {
@@ -598,7 +612,8 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer, int32_t n_i
     un_ir_mean = un_ir_mean / n_ir_buffer_length;
 
 #if ALGO_USE_IR_BANDPASS
-    /* 先去直流再带通（约 0.5~4.5 Hz），抑制基线漂移与高频噪声；找峰用，血氧仍用下方原始缓冲 */
+    /* 先去直流再带通（约 0.5~4.5 Hz），抑制基线漂移与高频噪声；找峰用，血氧仍用下方原始缓冲
+     * DC remove then bandpass (~0.5~4.5 Hz) for peak find; SpO2 still uses raw buffers below */
     for (k = 0; k < n_ir_buffer_length; k++)
     {
         s_bp_work[k] = (float)pun_ir_buffer[k] - (float)un_ir_mean;
@@ -810,7 +825,8 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer, int32_t n_i
     }
 
 #if ALGO_CHEST_MODE
-    /* 胸贴：去趋势+MAD 的 R（含 PI/通道相关/区间门控），取代逐拍峰谷比 */
+    /* 胸贴：去趋势+MAD 的 R（含 PI/通道相关/区间门控），取代逐拍峰谷比
+     * Chest: detrend+MAD R (PI/corr/range gating) replaces per-beat peak-valley ratio */
     if (ppg_spo2_window_ratio(pun_ir_buffer, pun_red_buffer, n_ir_buffer_length,
                                &n_ratio_average) == 0)
     {
@@ -828,7 +844,8 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer, int32_t n_i
 
         *pn_spo2 = (int32_t)(f_spo2 + 0.5f);
 #if ALGO_CHEST_MODE && ALGO_SPO2_REQUIRE_HR_VALID
-        /* 可选：要求 HR 同时有效作为额外质量交叉校验（会降低覆盖率） */
+        /* 可选：要求 HR 同时有效作为额外质量交叉校验（会降低覆盖率）
+         * Optional: require valid HR as extra QC cross-check (reduces coverage) */
         if (*pch_hr_valid != 0)
         {
             *pch_spo2_valid = 1;
@@ -839,7 +856,8 @@ void maxim_heart_rate_and_oxygen_saturation(uint32_t *pun_ir_buffer, int32_t n_i
             *pch_spo2_valid = 0;
         }
 #else
-        /* SpO2 质量已由 PI/通道相关/R 区间门控保证，与 HR 检测解耦 */
+        /* SpO2 质量已由 PI/通道相关/R 区间门控保证，与 HR 检测解耦
+         * SpO2 quality ensured by PI/corr/R gating, decoupled from HR detection */
         *pch_spo2_valid = 1;
 #endif
     }

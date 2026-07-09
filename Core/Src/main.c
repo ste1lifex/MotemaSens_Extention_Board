@@ -44,32 +44,42 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 /* 12s 周期：0~10s PPG（LED 开）→ 10~12s 关 LED，读体温、刷新显示、写 SD。
- * PPG 相位 10s 覆盖 ~2 个呼吸周期，离线验证可显著降低 SpO2 RMSE（见 algorithm.h）。 */
+ * 12s cycle: 0~10s PPG (LED on) -> 10~12s LED off, read temp, refresh display, write SD.
+ * PPG 相位 10s 覆盖 ~2 个呼吸周期，离线验证可显著降低 SpO2 RMSE（见 algorithm.h）。
+ * 10s PPG phase covers ~2 breath cycles; offline validation lowers SpO2 RMSE (see algorithm.h). */
 #define APP_MEAS_CYCLE_MS              12000U
 #define APP_PPG_PHASE_MS               10000U
 #define APP_POST_PHASE_MS              (APP_MEAS_CYCLE_MS - APP_PPG_PHASE_MS)
-/* MAX30102 原始幅值（18 位有效）：约 <5000 偏弱，>80000 易饱和，见 bsp_max30102 注释 */
+/* MAX30102 原始幅值（18 位有效）：约 <5000 偏弱，>80000 易饱和，见 bsp_max30102 注释
+ * MAX30102 raw amplitude (18-bit): <5000 weak, >80000 saturates; see bsp_max30102 comments */
 #define APP_PPG_WEAK_MAX               5000U
 #define APP_PPG_STRONG_MIN             80000U
-/* 红/红外 LED 电流档位(0x00~0xFF)。在 0x14 基础上再略降一档（AGC 初始/回退值） */
+/* 红/红外 LED 电流档位(0x00~0xFF)。在 0x14 基础上再略降一档（AGC 初始/回退值）
+ * Red/IR LED current level (0x00~0xFF); one step below 0x14 (AGC initial/fallback) */
 #define APP_MAX30102_LED_RED           0x13U
 #define APP_MAX30102_LED_IR            0x13U
 
 /* 软件 AGC：红=红外电流等比伺服，把 IR 的 DC 拉回标定工作点(~25000)。
+ * Software AGC: equal red/IR current servo pulls IR DC to calibration setpoint (~25000).
  * 等比缩放不改变 DC_rd/DC_ir，故 R 与 SpO2 标定仍有效；仅补偿跨会话耦合/贴合差异。
- * 死区较宽，良好耦合(20k~32k)时不动，避免抖动；越界才逐步调整。 */
+ * Proportional scaling preserves DC_rd/DC_ir, so R/SpO2 calibration stays valid; compensates coupling/contact drift.
+ * 死区较宽，良好耦合(20k~32k)时不动，避免抖动；越界才逐步调整。
+ * Wide deadband: no change when coupled well (20k~32k); step adjust only when out of range. */
 #define APP_AGC_ENABLE                 1
-#define APP_AGC_DC_TARGET              25000U   /* 目标 IR DC（=标定工作点） */
-#define APP_AGC_DC_LO                  20000U   /* 死区下限：低于则加大电流 */
-#define APP_AGC_DC_HI                  32000U   /* 死区上限：高于则减小电流 */
-#define APP_AGC_LED_MIN                0x0AU    /* 电流下限(~2mA) */
-#define APP_AGC_LED_MAX                0x40U    /* 电流上限(~12.8mA)，确保红光(耦合更高)不饱和 */
-#define APP_AGC_MAX_STEP               6        /* 每周期最大调整步长，防止过冲/振荡 */
-/* PB6 接 3.3V 判为关机请求的去抖时间（内部下拉，悬空为低） */
+#define APP_AGC_DC_TARGET              25000U   /* 目标 IR DC（=标定工作点）/ target IR DC (=cal setpoint) */
+#define APP_AGC_DC_LO                  20000U   /* 死区下限：低于则加大电流 / deadband low: increase current if below */
+#define APP_AGC_DC_HI                  32000U   /* 死区上限：高于则减小电流 / deadband high: decrease current if above */
+#define APP_AGC_LED_MIN                0x0AU    /* 电流下限(~2mA) / min current (~2mA) */
+#define APP_AGC_LED_MAX                0x40U    /* 电流上限(~12.8mA)，确保红光(耦合更高)不饱和 / max (~12.8mA), avoid red saturation */
+#define APP_AGC_MAX_STEP               6        /* 每周期最大调整步长，防止过冲/振荡 / max step per cycle, anti-overshoot */
+/* PB6 接 3.3V 判为关机请求的去抖时间（内部下拉，悬空为低）
+ * PB6 debounce when tied to 3.3V = shutdown request (internal pull-down, floating = low) */
 #define APP_PWR_SW_DEBOUNCE_MS         80U
-/* 血氧阶段结束时至少多少点才调用算法（不必凑满 BUFFER_SIZE） */
+/* 血氧阶段结束时至少多少点才调用算法（不必凑满 BUFFER_SIZE）
+ * Min samples at end of SpO2 phase before running algorithm (need not fill BUFFER_SIZE) */
 #define APP_PPG_MIN_SAMPLES            100U
-/* FIFO 读循环中每隔多少点刷新一次 OLED（减轻主循环负担） */
+/* FIFO 读循环中每隔多少点刷新一次 OLED（减轻主循环负担）
+ * OLED refresh interval in FIFO read loop (reduces main-loop load) */
 #define APP_PPG_OLED_UPDATE_INTERVAL   8U
 /* USER CODE END PD */
 
@@ -105,12 +115,14 @@ static uint16_t s_log_ppg_snapshot = 0U;
 static int32_t s_hr_fifo[HR_FIFO_SIZE];
 static uint8_t s_hr_fifo_count = 0U;
 static uint8_t s_hr_fifo_idx = 0U;
-/* SpO2 跨周期中值平滑：胸贴单周期 R 仍有残余噪声，离线验证 5 点中值可将 RMSE 0.97->0.82 */
+/* SpO2 跨周期中值平滑：胸贴单周期 R 仍有残余噪声，离线验证 5 点中值可将 RMSE 0.97->0.82
+ * Cross-cycle SpO2 median filter: 5-point median lowers RMSE 0.97->0.82 (offline validation) */
 #define SPO2_FIFO_SIZE 5
 static int32_t s_spo2_fifo[SPO2_FIFO_SIZE];
 static uint8_t s_spo2_fifo_count = 0U;
 static uint8_t s_spo2_fifo_idx = 0U;
-/* 软件 AGC 当前 LED 电流档位（红=红外共用），初值为标定电流 */
+/* 软件 AGC 当前 LED 电流档位（红=红外共用），初值为标定电流
+ * Current software AGC LED level (red=IR shared); initial = calibration current */
 static uint8_t s_agc_led_pa = APP_MAX30102_LED_RED;
 /* USER CODE END PV */
 
@@ -148,7 +160,8 @@ static void App_RestorePb6PowerSensePin(void)
 static void App_EnterStopFromPowerSwitch(void)
 {
   GPIO_InitTypeDef g = {0};
-  /* 下降沿唤醒：外部撤掉 3.3V 后内部下拉将 PB6 拉低 */
+  /* 下降沿唤醒：外部撤掉 3.3V 后内部下拉将 PB6 拉低
+   * Wake on falling edge: after 3.3V removed, internal pull-down pulls PB6 low */
   g.Pin = GPIO_PIN_6;
   g.Mode = GPIO_MODE_IT_FALLING;
   g.Pull = GPIO_PULLDOWN;
@@ -161,7 +174,8 @@ static void App_EnterStopFromPowerSwitch(void)
   (void)MAX30102_SetLEDCurrent(0U, 0U);
   OLED_CLS();
 
-  /* STOP 后 HSE/PLL 停振，唤醒须重配时钟；若板级直接断电则不会执行到这里 */
+  /* STOP 后 HSE/PLL 停振，唤醒须重配时钟；若板级直接断电则不会执行到这里
+   * HSE/PLL stop after STOP; wake requires clock reconfig; skipped if board powers off */
   HAL_SuspendTick();
   HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON, PWR_STOPENTRY_WFI);
   HAL_ResumeTick();
@@ -179,7 +193,8 @@ static void App_UpdateLedStatusDisplay(uint8_t led_on)
 
   if (led_on != 0U)
   {
-    /* 显示当前 AGC 电流档位，便于现场观察 AGC 是否调整 */
+    /* 显示当前 AGC 电流档位，便于现场观察 AGC 是否调整
+     * Show current AGC LED level for field observation */
     (void)snprintf(line, sizeof(line), "LED ON PA=%02X    ", (unsigned int)s_agc_led_pa);
     OLED_ShowStr(0, 0, (unsigned char *)line, 1);
   }
@@ -271,7 +286,8 @@ static float App_ReadBatteryVoltage(void)
   sample = (uint16_t)(sum / 8U);
   v_adc = ((float)sample * 3.3f) / 4095.0f;
 
-  /* 分压电阻 100k:100k，电池电压为采样点电压的 2 倍 */
+  /* 分压电阻 100k:100k，电池电压为采样点电压的 2 倍
+   * Divider 100k:100k; battery voltage = 2x ADC node voltage */
   return v_adc * 2.0f;
 }
 
@@ -410,7 +426,8 @@ static void App_UpdateAgc(uint32_t mean_ir)
   int32_t new_pa;
   int32_t step;
 
-  /* 无有效均值或已在死区内则保持不变（良好耦合不抖动） */
+  /* 无有效均值或已在死区内则保持不变（良好耦合不抖动）
+   * Hold if no valid mean or inside deadband (good coupling, no jitter) */
   if (mean_ir == 0U)
   {
     return;
@@ -420,7 +437,8 @@ static void App_UpdateAgc(uint32_t mean_ir)
     return;
   }
 
-  /* 比例伺服：DC 正比于电流，故 new_pa = pa * target / mean_ir */
+  /* 比例伺服：DC 正比于电流，故 new_pa = pa * target / mean_ir
+   * Proportional servo: DC ~ current, so new_pa = pa * target / mean_ir */
   new_pa = (int32_t)(((uint64_t)pa * (uint64_t)APP_AGC_DC_TARGET) / (uint64_t)mean_ir);
   step = new_pa - pa;
   if (step > APP_AGC_MAX_STEP)
@@ -460,7 +478,8 @@ static void App_ComputePpgMetrics(uint16_t n_samples)
 
 #if APP_AGC_ENABLE
   {
-    /* 用本周期 IR 均值(≈DC)更新 AGC，下一周期生效 */
+    /* 用本周期 IR 均值(≈DC)更新 AGC，下一周期生效
+     * Update AGC from this cycle's IR mean (~DC); takes effect next cycle */
     uint32_t k;
     uint64_t sum_ir = 0U;
     for (k = 0U; k < n_samples; k++)
@@ -497,7 +516,8 @@ static void App_ScanI2C2(void)
   uint8_t probe_list[2] = {0x30U, 0x32U};
   uint8_t i = 0U;
 
-  /* 仅探测体温芯片可能地址，避免全地址扫描阻塞主循环 */
+  /* 仅探测体温芯片可能地址，避免全地址扫描阻塞主循环
+   * Probe only likely temp-sensor addresses; avoid full I2C scan blocking main loop */
   for (i = 0U; i < 2U; i++)
   {
     (void)HAL_I2C_IsDeviceReady(&hi2c2, probe_list[i], 1, 5U);
@@ -642,10 +662,12 @@ int main(void)
       s_cycle_ppg_count = 0U;
       s_hr_fifo_count = 0U;
       s_hr_fifo_idx = 0U;
-      /* 唤醒后重新开始测量，清空 SpO2 跨周期平滑（避免休眠前的旧值串入） */
+      /* 唤醒后重新开始测量，清空 SpO2 跨周期平滑（避免休眠前的旧值串入）
+       * After wake: restart measurement, clear SpO2 median filter (avoid stale pre-sleep values) */
       s_spo2_fifo_count = 0U;
       s_spo2_fifo_idx = 0U;
-      /* 唤醒后重置 AGC 到标定电流，重新收敛（贴合可能已变） */
+      /* 唤醒后重置 AGC 到标定电流，重新收敛（贴合可能已变）
+       * After wake: reset AGC to calibration current (contact may have changed) */
       s_agc_led_pa = APP_MAX30102_LED_RED;
       sample_index = 0U;
       (void)MAX30102_SetLEDCurrent(s_agc_led_pa, s_agc_led_pa);
@@ -672,7 +694,8 @@ int main(void)
       s_hr_fifo_count = 0U;
       s_hr_fifo_idx = 0U;
       sample_index = 0U;
-      /* 应用上一周期 AGC 收敛后的电流（红=红外，保持 R 标定有效） */
+      /* 应用上一周期 AGC 收敛后的电流（红=红外，保持 R 标定有效）
+       * Apply AGC-converged current from last cycle (red=IR, preserves R calibration) */
       (void)MAX30102_SetLEDCurrent(s_agc_led_pa, s_agc_led_pa);
       dt = 0U;
       App_UpdatePpgLevelDisplay(0U, 0U, 1U);
@@ -680,7 +703,8 @@ int main(void)
 
     if (dt < APP_MEAS_CYCLE_MS)
     {
-      /* 0~6s：采 PPG；满 BUFFER_SIZE 可提前算；6s 关灯并快照 */
+      /* 0~6s：采 PPG；满 BUFFER_SIZE 可提前算；6s 关灯并快照
+       * 0~6s: acquire PPG; compute early if BUFFER_SIZE full; at 6s turn off LED and snapshot */
       if (s_cycle_led_off_done == 0U)
       {
         if (sample_index < BUFFER_SIZE)
@@ -734,7 +758,8 @@ int main(void)
           App_UpdatePpgLevelDisplay(0U, 0U, 0U);
         }
       }
-      /* 6~8s：关 LED 后读体温、刷新 HR/SpO2/体温、写 SD（不占用下一周期 PPG） */
+      /* 6~8s：关 LED 后读体温、刷新 HR/SpO2/体温、写 SD（不占用下一周期 PPG）
+       * 6~8s: after LED off, read temp, refresh HR/SpO2/temp, write SD (no next-cycle PPG overlap) */
       else if (dt < (APP_PPG_PHASE_MS + APP_POST_PHASE_MS))
       {
         if (s_cycle_temp_done == 0U)

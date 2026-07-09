@@ -66,7 +66,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /* PB6：内部下拉，悬空≈低电平(运行)；外部接 3.3V≈关机请求（主循环检测后进入 STOP） */
+  /* PB6：内部下拉，悬空≈低电平(运行)；外部接 3.3V≈关机请求（主循环检测后进入 STOP）
+   * PB6: internal pull-down, floating~low (run); 3.3V~shutdown request (main loop -> STOP) */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;

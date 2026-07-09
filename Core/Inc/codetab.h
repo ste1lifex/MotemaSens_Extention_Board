@@ -5,12 +5,16 @@
   * @version V1.0
   * @date    2014-xx-xx
   * @brief   128*64点阵OLED显示驱动，适用于SD1306，使用IIC通信方式显示。
+  *          128x64 OLED driver for SSD1306 (I2C display reference).
   ******************************************************************************
   * @attention  *
 	* 
 	* 1. 128*64点阵OLED模块功能显示，可直接联系heltec.taobao.com购买产品;
+	*    128x64 OLED module demo; see heltec.taobao.com for hardware.
 	* 2. 字库可从字库生成工具中"取模"功能获得;
+	*    Font data from glyph tool "取模" export.
 	* 3. 取模方式 -- 阴码，逐行式，逆向
+	*    Glyph format: negative code, row-major, reversed
 	*
   *
   ******************************************************************************
@@ -20,6 +24,7 @@
 
 
 /***************************16*16的点阵字库，取模方式：阴码，逐行式，逆向*************************/
+/* 16x16 glyph font, format: negative code, row-major, reversed */
 unsigned char F16x16[] =
 {	0x00,0xFE,0x92,0x92,0xFE,0x92,0x92,0xFE,0x00,0x42,0x4A,0xD2,0x6A,0x46,0xC0,0x00,
 	0x40,0xC4,0x44,0x44,0x3F,0x24,0x24,0x24,0x00,0x40,0x80,0x7F,0x00,0x01,0x00,0x00,/*"野",0*/
@@ -36,6 +41,7 @@ unsigned char F16x16[] =
 
 
 /************************************6*8的点阵************************************/
+/* 6x8 glyph font */
 const unsigned char F6x8[][6] =
 {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,// sp
@@ -132,6 +138,7 @@ const unsigned char F6x8[][6] =
 	0x14, 0x14, 0x14, 0x14, 0x14, 0x14,// horiz lines
 };
 /****************************************8*16的点阵************************************/
+/* 8x16 glyph font */
 const unsigned char F8X16[]=	  
 {
   0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,// 0

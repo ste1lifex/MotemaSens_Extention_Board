@@ -5,7 +5,9 @@
   * @version  V1.0
   * @date     2024
   * @brief    SPI OLED应用接口 - STM32F10x标准库版本
+  *           SPI OLED application interface - STM32F10x stdlib port
   * @note     引脚分配: PA2-RES, PA3-DC, PA4-CS, PA5-SCK, PA7-MOSI
+  *           Pinout: PA2-RES, PA3-DC, PA4-CS, PA5-SCK, PA7-MOSI
   ******************************************************************************
   */
 #include "bsp_spi_oled.h"
@@ -14,9 +16,9 @@
 #include "gpio.h"
 
 /**
-  * @brief  简单延时函数
-  * @param  ms: 延时毫秒数
-  * @retval 无
+  * @brief  简单延时函数 / Simple delay
+  * @param  ms: 延时毫秒数 / Delay in milliseconds
+  * @retval 无 / None
   */
 extern SPI_HandleTypeDef hspi1;
 
@@ -26,10 +28,10 @@ static void Delay_ms(uint32_t ms)
 }
 
 /**
-  * @brief  SPI和GPIO初始化
-  * @param  无
-  * @note   无
-  * @retval 无
+  * @brief  SPI和GPIO初始化 / SPI and GPIO init
+  * @param  无 / None
+  * @note   无 / None
+  * @retval 无 / None
   */
 void Bsp_SPI_OLED_Init(void)
 {
@@ -37,7 +39,7 @@ void Bsp_SPI_OLED_Init(void)
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
-    /* CS/DC/RES 由软件控制 */
+    /* CS/DC/RES 由软件控制 / CS/DC/RES under software control */
     GPIO_InitStruct.Pin = OLED_CS_PIN | OLED_DC_PIN | OLED_RES_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -50,9 +52,9 @@ void Bsp_SPI_OLED_Init(void)
 }
 
 /**
-  * @brief  SPI发送一个字节
-  * @param  data: 要发送的数据
-  * @retval 无
+  * @brief  SPI发送一个字节 / SPI transmit one byte
+  * @param  data: 要发送的数据 / Data to send
+  * @retval 无 / None
   */
 static void SPI_WriteByte(uint8_t data)
 {
@@ -60,9 +62,9 @@ static void SPI_WriteByte(uint8_t data)
 }
 
  /**
-  * @brief  WriteCmd向OLED写命令
-  * @param  Command: 命令字
-  * @retval 无
+  * @brief  WriteCmd向OLED写命令 / Write command to OLED
+  * @param  Command: 命令字 / Command byte
+  * @retval 无 / None
   */
 static void WriteCmd(unsigned char Command)
 {
@@ -73,9 +75,9 @@ static void WriteCmd(unsigned char Command)
 }
 
  /**
-  * @brief  WriteDat向OLED写数据
-  * @param  Data: 数据
-  * @retval 无
+  * @brief  WriteDat向OLED写数据 / Write data to OLED
+  * @param  Data: 数据 / Data byte
+  * @retval 无 / None
   */
 static void WriteDat(unsigned char Data)
 {
@@ -86,19 +88,19 @@ static void WriteDat(unsigned char Data)
 }
 
  /**
-  * @brief  OLED_Init初始化OLED
-  * @param  无
-  * @retval 无
+  * @brief  OLED_Init初始化OLED / Initialize OLED
+  * @param  无 / None
+  * @retval 无 / None
   */
 void OLED_Init(void)
 {
-    /* 硬件复位 */
+    /* 硬件复位 / Hardware reset */
     HAL_GPIO_WritePin(OLED_RES_PORT, OLED_RES_PIN, GPIO_PIN_RESET);
     Delay_ms(100);
     HAL_GPIO_WritePin(OLED_RES_PORT, OLED_RES_PIN, GPIO_PIN_SET);
     Delay_ms(100);
     
-    /* 初始化序列 */
+    /* 初始化序列 / Initialization sequence */
     WriteCmd(0xAE); //display off
     WriteCmd(0x20); //Set Memory Addressing Mode	
     WriteCmd(0x10); //00,Horizontal Addressing Mode;01,Vertical Addressing Mode;10,Page Addressing Mode (RESET);11,Invalid
@@ -108,7 +110,7 @@ void OLED_Init(void)
     WriteCmd(0x10); //---set high column address
     WriteCmd(0x40); //--set start line address
     WriteCmd(0x81); //--set contrast control register
-    WriteCmd(0xff); //亮度调节 0x00~0xff
+    WriteCmd(0xff); //亮度调节 0x00~0xff / Brightness 0x00~0xff
     WriteCmd(0xa1); //--set segment re-map 0 to 127
     WriteCmd(0xa6); //--set normal display
     WriteCmd(0xa8); //--set multiplex ratio(1 to 64)
@@ -130,10 +132,10 @@ void OLED_Init(void)
 }
 
  /**
-  * @brief  OLED_SetPos设置坐标（内部函数）
-  * @param  x,列x位置
-  *         y,页y位置
-  * @retval 无
+  * @brief  OLED_SetPos设置坐标（内部函数）/ Set position (internal)
+  * @param  x,列x位置 / Column x
+  *         y,页y位置 / Page y
+  * @retval 无 / None
   */
 static void OLED_SetPos(unsigned char x, unsigned char y)
 { 
@@ -143,9 +145,9 @@ static void OLED_SetPos(unsigned char x, unsigned char y)
 }
 
  /**
-  * @brief  OLED_Fill填充整个屏幕
-  * @param  fill_Data:要填充的数据
-  * @retval 无
+  * @brief  OLED_Fill填充整个屏幕 / Fill entire screen
+  * @param  fill_Data:要填充的数据 / Fill pattern
+  * @retval 无 / None
   */
 void OLED_Fill(unsigned char fill_Data)
 {
@@ -163,9 +165,9 @@ void OLED_Fill(unsigned char fill_Data)
 }
 
  /**
-  * @brief  OLED_CLS清屏
-  * @param  无
-  * @retval 无
+  * @brief  OLED_CLS清屏 / Clear screen
+  * @param  无 / None
+  * @retval 无 / None
   */
 void OLED_CLS(void)
 {
@@ -173,9 +175,9 @@ void OLED_CLS(void)
 }
 
  /**
-  * @brief  OLED_ON点亮OLED显示/睡眠唤醒
-  * @param  无
-  * @retval 无
+  * @brief  OLED_ON点亮OLED显示/睡眠唤醒 / Turn OLED on / wake from sleep
+  * @param  无 / None
+  * @retval 无 / None
   */
 void OLED_ON(void)
 {
@@ -185,9 +187,9 @@ void OLED_ON(void)
 }
 
  /**
-  * @brief  OLED_OFF关闭OLED显示
-  * @param  无
-  * @retval 无
+  * @brief  OLED_OFF关闭OLED显示 / Turn OLED off
+  * @param  无 / None
+  * @retval 无 / None
   */
 void OLED_OFF(void)
 {
@@ -197,11 +199,11 @@ void OLED_OFF(void)
 }
 
  /**
-  * @brief  OLED_ShowStr显示字符串
-  * @param  x,y : 起始坐标(x:0~127, y:0~7);
-  *         ch[] : 要显示的字符串; 
-  *         TextSize : 字符大小(1:6*8 ; 2:8*16)
-  * @retval 无
+  * @brief  OLED_ShowStr显示字符串 / Display ASCII string
+  * @param  x,y : 起始坐标(x:0~127, y:0~7); / Start (x:0~127, y:0~7)
+  *         ch[] : 要显示的字符串; / String to display
+  *         TextSize : 字符大小(1:6*8 ; 2:8*16) / Size (1:6x8, 2:8x16)
+  * @retval 无 / None
   */
 void OLED_ShowStr(unsigned char x, unsigned char y, unsigned char ch[], unsigned char TextSize)
 {
@@ -249,10 +251,10 @@ void OLED_ShowStr(unsigned char x, unsigned char y, unsigned char ch[], unsigned
 }
 
  /**
-  * @brief  OLED_ShowCN显示汉字
-  * @param  x,y: 起始坐标(x:0~127, y:0~7); 
-  *         N:汉字在codetab.h中的序号
-  * @retval 无
+  * @brief  OLED_ShowCN显示汉字 / Display Chinese glyph
+  * @param  x,y: 起始坐标(x:0~127, y:0~7); / Start (x:0~127, y:0~7)
+  *         N:汉字在codetab.h中的序号 / Glyph index in codetab.h
+  * @retval 无 / None
   */
 void OLED_ShowCN(unsigned char x, unsigned char y, unsigned char N)
 {
@@ -273,10 +275,10 @@ void OLED_ShowCN(unsigned char x, unsigned char y, unsigned char N)
 }
 
  /**
-  * @brief  OLED_DrawBMP显示BMP位图
-  * @param  x0,y0 :起始坐标(x0:0~127, y0:0~7);
-  *         x1,y1 : 对角(右下角)坐标(x1:1~128,y1:1~8)
-  * @retval 无
+  * @brief  OLED_DrawBMP显示BMP位图 / Draw BMP bitmap
+  * @param  x0,y0 :起始坐标(x0:0~127, y0:0~7); / Start (x0:0~127, y0:0~7)
+  *         x1,y1 : 对角(右下角)坐标(x1:1~128,y1:1~8) / Bottom-right (x1:1~128, y1:1~8)
+  * @retval 无 / None
   */
 void OLED_DrawBMP(unsigned char x0,unsigned char y0,unsigned char x1,unsigned char y1,unsigned char BMP[])
 {

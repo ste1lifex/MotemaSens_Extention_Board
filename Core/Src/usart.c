@@ -73,6 +73,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PA9     ------> USART1_TX
     PA10    ------> USART1_RX
     PB6 已改为电源/关机检测输入，不再用作 USART1_TX。
+    PB6 repurposed for power/shutdown sense; no longer USART1_TX.
     */
     GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;

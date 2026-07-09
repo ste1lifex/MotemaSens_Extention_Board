@@ -202,6 +202,7 @@ void SysTick_Handler(void)
 
 /**
   * @brief PB6 关机请求线 EXTI（与 EXTI5~9 共用），用于从 STOP 唤醒
+  *        PB6 shutdown-request EXTI (shared EXTI5~9), wakes from STOP mode
   */
 void EXTI9_5_IRQHandler(void)
 {

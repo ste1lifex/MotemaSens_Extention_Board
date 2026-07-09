@@ -4,12 +4,14 @@
 extern I2C_HandleTypeDef hi2c2;
 
 #define GD60932_I2C_TIMEOUT_MS   200U
-/* 手册：触发后等待 0.5s 再读 0x1C；略加长以提高成功率 */
+/* 触发后等待 0.5s 再读 0x1C；略加长以提高成功率
+ * Wait 0.5s after trigger before reading 0x1C; slightly longer for reliability */
 #define GD60932_MEASURE_WAIT_MS  600U
 #define GD60932_RETRY_COUNT      5U
 #define GD60932_TEMP_READ_RETRIES 16U
 #define GD60932_TEMP_READ_RETRY_MS 35U
-/* 手册应答占位：勿当作 0x1C 温度原始值 */
+/* 手册应答占位：勿当作 0x1C 温度原始值
+ * Datasheet ACK placeholders: do not treat as 0x1C temperature raw value */
 #define GD60932_ACK_FOREHEAD_U16 0x8080U
 #define GD60932_ACK_WRIST_U16    0x8181U
 #define GD60932_ACK_TRIGGER_U16  0x55AAU
@@ -17,7 +19,8 @@ extern I2C_HandleTypeDef hi2c2;
 
 static uint32_t s_last_i2c_error = 0U;
 static uint8_t s_last_ready_addr = 0U;
-/* Init 时探测到的 7 位从机地址；读函数必须用此地址，不能写死 0x18 */
+/* Init 时探测到的 7 位从机地址；读函数必须用此地址，不能写死 0x18
+ * 7-bit slave address found at init; read functions must use it, not hardcoded 0x18 */
 static uint8_t s_dev_addr7 = GD60932_I2C_ADDR_7BIT;
 
 static GD60932_Status_t GD60932_ReadU16(uint8_t reg, uint16_t *value)
@@ -29,7 +32,8 @@ static GD60932_Status_t GD60932_ReadU16(uint8_t reg, uint16_t *value)
 
     for (retry = 0U; retry < GD60932_RETRY_COUNT; retry++)
     {
-        /* Mem_Read：写寄存器地址 + 重复起始 + 读 2 字节，与手册“读寄存器”时序一致 */
+        /* Mem_Read：写寄存器地址 + 重复起始 + 读 2 字节，与手册“读寄存器”时序一致
+         * Mem_Read: write reg addr + repeated start + read 2 bytes per datasheet */
         hal_st = HAL_I2C_Mem_Read(&hi2c2, dev_hal, reg, I2C_MEMADD_SIZE_8BIT, buf, 2, GD60932_I2C_TIMEOUT_MS);
         if (hal_st == HAL_OK)
         {
@@ -117,7 +121,8 @@ GD60932_Status_t GD60932_Init(void)
         return GD60932_ERR_I2C;
     }
 
-    /* 读取额头温度模式寄存器用于探测器件在线状态 */
+    /* 读取额头温度模式寄存器用于探测器件在线状态
+     * Read forehead mode register to probe device online status */
     return GD60932_ReadU16(GD60932_REG_FOREHEAD, &mode);
 }
 
@@ -135,7 +140,8 @@ GD60932_Status_t GD60932_ReadBodyTemperature(float *temp_c)
         return GD60932_ERR_DATA;
     }
 
-    /* 额头温度模式：读 0x80 → 读 0x1A → 延时 → 读 0x1C */
+    /* 额头温度模式：读 0x80 → 读 0x1A → 延时 → 读 0x1C
+     * Forehead temp mode: read 0x80 -> read 0x1A -> delay -> read 0x1C */
     st = GD60932_ReadU16(GD60932_REG_FOREHEAD, &forehead_ack);
     if (st != GD60932_OK)
     {

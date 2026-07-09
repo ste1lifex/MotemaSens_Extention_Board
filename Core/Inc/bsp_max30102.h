@@ -3,11 +3,11 @@
 
 #include "main.h"
 
-/* MAX30102 I2C地址 */
-#define MAX30102_I2C_WRITE_ADDR  0xAE  // 写地址
-#define MAX30102_I2C_READ_ADDR  0xAF  // 读地址
+/* MAX30102 I2C地址 / MAX30102 I2C address */
+#define MAX30102_I2C_WRITE_ADDR  0xAE  // 写地址 / Write address
+#define MAX30102_I2C_READ_ADDR  0xAF  // 读地址 / Read address
 
-/* 寄存器地址 */
+/* 寄存器地址 / Register addresses */
 #define REG_INTR_STATUS_1    0x00
 #define REG_INTR_STATUS_2    0x01
 #define REG_INTR_ENABLE_1    0x02
@@ -31,15 +31,14 @@
 #define REG_REV_ID           0xFE
 #define REG_PART_ID          0xFF
 
-/* 函数声明 */
+/* 函数声明 / Function declarations */
 void Bsp_MAX30102_Init(void);
 uint8_t MAX30102_WriteReg(uint8_t reg_addr, uint8_t reg_data);
 uint8_t MAX30102_ReadReg(uint8_t reg_addr, uint8_t *reg_data);
 uint8_t MAX30102_ReadFIFO(uint32_t *red_led, uint32_t *ir_led);
 uint8_t MAX30102_Reset(void);
-void MAX30102_EXTI_Init(void);  // 外部中断初始化
-uint8_t MAX30102_CheckFIFOStatus(void);  // 检查FIFO状态
-uint8_t MAX30102_SetLEDCurrent(uint8_t led1_current, uint8_t led2_current);  // 设置LED电流强度
+void MAX30102_EXTI_Init(void);  // 外部中断初始化 / External interrupt init
+uint8_t MAX30102_CheckFIFOStatus(void);  // 检查FIFO状态 / Check FIFO status
+uint8_t MAX30102_SetLEDCurrent(uint8_t led1_current, uint8_t led2_current);  // 设置LED电流强度 / Set LED current
 
 #endif /* __BSP_MAX30102_H */
-

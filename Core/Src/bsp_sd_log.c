@@ -7,7 +7,8 @@
 
 #define SD_LOG_FILE_PATH   "DATA.CSV"
 #define SD_LOG_MKFS_WORK   4096U
-/* 每 N 个周期 f_sync 一次，减轻写盘阻塞（调试数据仍逐行写入） */
+/* 每 N 个周期 f_sync 一次，减轻写盘阻塞（调试数据仍逐行写入）
+ * f_sync every N cycles to reduce write blocking (debug rows still written per line) */
 #define SD_LOG_SYNC_EVERY_CYCLES  5U
 
 static FATFS s_fatfs;
